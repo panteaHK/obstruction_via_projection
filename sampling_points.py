@@ -7,6 +7,15 @@ import relocator
 seed = 100
 
 
+def randomize_data(data, percentage):
+    n = int(np.round(data.shape[0] * percentage/100))
+    indx = np.random.randint(0, data.shape[0], n)
+    for i in indx:
+        val = data[i, -1]
+        data[i, -1] = (val + 1) % 2
+    return data
+
+
 def make_square(n_samples=500, dim=8, color=0):
     data = np.zeros((n_samples, 3))
     for i in range(n_samples):
@@ -75,6 +84,23 @@ def make_s_dataset(n_samples=1000, noise=0.05):
     return data
 
 
+def grow_rectangle_horizontally(points, x_start, x_end, percentage):
+    out = np.empty((0,3))
+    s = 200
+    for p in points:
+        if p[0] < x_start[0]:
+            s = (x_start[0]-p[0]) / (x_start[0]-x_end[0])
+            s *= 100
+        elif p[0] > x_start[1]:
+            s = (p[0] - x_start[1]) / (x_end[1] - x_start[1])
+            s *= 100
+        else:
+            s = 0
+        if s <= percentage:
+            out = np.vstack((out, p))
+    return out
+
+
 def get_centers(dim):
     centers = np.empty((0,2))
     for i in range(8):
@@ -109,6 +135,7 @@ def cut_off_points(data, xlim, ylim):
         if x >= xlim[0] and x <= xlim[1] and y >= ylim[0] and y <= ylim[1]:
             new = np.vstack((new, p))
     return new
+
 
 def make_checker_squares(squares, n_samples, dim):
     coloring = [1, 0, 1, 0, 1, 0, 1, 0,
@@ -181,7 +208,7 @@ def geometric_mixing_checkerboards(dim, density):
         util.plot_points_2d_np(data, plt, 'pointsets/checkerboard_gm/checkerboard_gm_{}.png'.format(i*10))
 
 
-def make_crossing_rectangles(shape_horizontal, width_vertical, n_samples_unit=125):
+def make_crossing_rectangles(shape_horizontal, width_vertical, n_samples=125):
     a, b = shape_horizontal
     w = width_vertical
     h_v = (0, a + b)
@@ -190,9 +217,9 @@ def make_crossing_rectangles(shape_horizontal, width_vertical, n_samples_unit=12
     w_v = (c - w/2, c + w/2)
     area_h = w_v[0] * (h_h[1] - h_h[0])
     area_v = h_v[1] * w
-    r0 = make_rectangle_lim((0, w_v[0]), h_h, int(np.round(n_samples_unit * area_h)))
-    r1 = make_rectangle_lim((w_v[1], a), h_h, int(np.round(n_samples_unit * area_h)))
-    r2 = make_rectangle_lim(w_v, h_v, int(np.round(n_samples_unit * area_v)))
+    r0 = make_rectangle_lim((0, w_v[0]), h_h, int(np.round(n_samples * area_h)))
+    r1 = make_rectangle_lim((w_v[1], a), h_h, int(np.round(n_samples * area_h)))
+    r2 = make_rectangle_lim(w_v, h_v, int(np.round(n_samples * area_v)))
     r2[:, -1] = np.ones((r2.shape[0]))
     return np.vstack((r0,r1,r2))
 
@@ -206,13 +233,11 @@ def make_moons(n_samples=1000, noise=.05):
     return data
 
 
-def make_cross(lim1x, lim1y, lim2x, lim2y, n_samples_unit=50):
-    d0 = make_rectangle_lim((6, 7), (0, 6), 7 * n_samples_unit)
-    d1 = make_rectangle_lim((6, 7), (7, 13), 7 * n_samples_unit)
-    d2 = make_rectangle_lim((0, 6), (6, 7), 7 * n_samples_unit)
-    d3 = make_rectangle_lim((7, 13), (6, 7), 7 * n_samples_unit)
-    d2[:, -1] = np.ones(shape=(d2.shape[0]))
-    d3[:, -1] = np.ones(shape=(d3.shape[0]))
+def make_cross(lim1x, lim2x, lim1y, lim2y, n_samples=500):
+    d0 = make_rectangle_lim(lim1x, (lim1y[1], lim2y[0]), n_samples, color=0)
+    d1 = make_rectangle_lim((lim1x[1], lim2x[0]), lim2y,  n_samples, color=1)
+    d2 = make_rectangle_lim(lim2x, (lim1y[1], lim2y[0]),  n_samples, color=0)
+    d3 = make_rectangle_lim((lim1x[1], lim2x[0]), lim1y,  n_samples, color=1)
     return np.vstack((d1, d2, d3, d0))
 
 
@@ -305,23 +330,6 @@ def geometric_mixing_circles(c1, c2, r, n_samples):
         plt.ylim(c1[1]-2*r, c1[1]+2*r)
         plt.xlim(c1[0]-r*1.1,  c2[0]+r*1.1)
         util.plot_points_2d_np(data, plt,'pointsets/circles_gm/circles_gm_{}.png'.format(i * 10))
-
-
-def grow_rectangle_horizontally(points, x_start, x_end, percentage):
-    out = np.empty((0,3))
-    s = 200
-    for p in points:
-        if p[0] < x_start[0]:
-            s = (x_start[0]-p[0]) / (x_start[0]-x_end[0])
-            s *= 100
-        elif p[0] > x_start[1]:
-            s = (p[0] - x_start[1]) / (x_end[1] - x_start[1])
-            s *= 100
-        else:
-            s = 0
-        if s <= percentage:
-            out = np.vstack((out, p))
-    return out
 
 
 def make_n_dimensional_sphere(dimension, r = 1, density=500):
@@ -431,11 +439,13 @@ def geometric_mixing_crossing_recs_fixed(x_start, x_end, y_start, y_end, n_sampl
     left_step = (x_start[0] - x_end[0])/10
     up_step = (y_end[1] - y_start[1])/ 10
     down_step = (y_start[0] - y_end[0])/10
+    in_blue_step = (x_start[1] - x_start[0])/20
     w, h = x_end[1], y_end[1]
     for i in range(11):
         reds = make_rectangle_lim(limx=(x_start[0] - i*left_step, x_start[1] + i*right_step), limy=(0,h), n_samples=n_samples, color=1)
-        blues = make_rectangle_lim(limx=(0,w), limy=(y_start[0] - down_step*i, y_start[1]+up_step*i), n_samples=n_samples, color=0)
-        data = np.vstack((blues,reds))
+        blues1 = make_rectangle_lim(limx=(0,x_start[0] + i*in_blue_step), limy=(y_start[0] - down_step*i, y_start[1]+up_step*i), n_samples=n_samples, color=0)
+        blues2 = make_rectangle_lim(limx=(x_start[1] - i*in_blue_step, w), limy=(y_start[0] - down_step*i, y_start[1] + up_step*i), n_samples=n_samples,color=0)
+        data = np.vstack((blues1, blues2,reds))
         np.save('pointsets/crossing_recs_gm_fixed/crossing_recs_gm_fixed_{}_0.npy'.format(i * 10), data)
         plt.tick_params(
             axis='both',  # changes apply to the x-axis
@@ -453,13 +463,19 @@ def geometric_mixing_crossing_recs(x_start, x_end, y_start, y_end, density):
     left_step = (x_start[0] - x_end[0])/10
     up_step = (y_end[1] - y_start[1])/ 10
     down_step = (y_start[0] - y_end[0])/10
+    in_blue_step = (x_start[1] - x_start[0])/20
     w, h = x_end[1], y_end[1]
     for i in range(11):
         red_area = (x_start[1] + i*right_step - (x_start[0] - i*left_step )) * h
-        blue_area = (y_start[1]+up_step*i - (y_start[0] - down_step*i)) * w
+        blue_area = (y_start[1]+up_step*i - (y_start[0] - down_step*i)) * (x_start[0] + i * in_blue_step)
         reds = make_rectangle_lim(limx=(x_start[0] - i*left_step, x_start[1] + i*right_step), limy=(0,h), n_samples=int(red_area * density), color=1)
-        blues = make_rectangle_lim(limx=(0,w), limy=(y_start[0] - down_step*i, y_start[1]+up_step*i), n_samples=int(blue_area * density), color=0)
-        data = np.vstack((blues,reds))
+        blues1 = make_rectangle_lim(limx=(0, x_start[0] + i * in_blue_step),
+                                    limy=(y_start[0] - down_step * i, y_start[1] + up_step * i), n_samples=int(density*blue_area),
+                                    color=0)
+        blues2 = make_rectangle_lim(limx=(x_start[1] - i * in_blue_step, w),
+                                    limy=(y_start[0] - down_step * i, y_start[1] + up_step * i), n_samples=int(density*blue_area),
+                                    color=0)
+        data = np.vstack((blues1, blues2,reds))
         np.save('pointsets/crossing_recs_gm/crossing_recs_gm_{}_0.npy'.format(i * 10), data)
         plt.tick_params(
             axis='both',  # changes apply to the x-axis
@@ -471,6 +487,130 @@ def geometric_mixing_crossing_recs(x_start, x_end, y_start, y_end, density):
             labelleft=False)
         util.plot_points_2d_np(data, plt, 'pointsets/crossing_recs_gm/crossing_recs_gm_{}.png'.format(i*10))
 
+
+def probabilistic_mixing_inner_circle(r_inner, r_outer, n_samples):
+    for i in range(0, 8):
+        rsample = int(np.pi * (r_inner) ** 2 * n_samples)
+        bsample = int(np.pi * ((r_outer ** 2) - (r_inner ** 2)) * n_samples)
+        red = make_circle(n_samples=rsample, radius=r_inner, color=1)
+        blue = make_2d_donut(bsample, r_inner, r_outer, color=0)
+        data = np.vstack((red, blue))
+        data = randomize_data(data, i*10)
+        np.save('pointsets/inner_circle_pm/inner_circle_pm_{}_0.npy'.format(i * 10), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        util.plot_points_2d_np(data, plt, 'pointsets/inner_circle_pm/inner_circle_pm_{}.png'.format(i * 10))
+
+
+def probabilistic_mixing_checkerboard(n_samples, dim):
+    for i in range(0, 80, 10):
+        data = make_checkerboard(n_samples, dim)
+        data = randomize_data(data, i)
+        np.save('pointsets/checkerboard_pm/checkerboard_pm_{}_0.npy'.format(i), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        util.plot_points_2d_np(data, plt, 'pointsets/checkerboard_pm/checkerboard_pm_{}.png'.format(i))
+
+
+def probabilistic_mixing_circles(c1, c2, r, n_samples):
+    c1 = np.array([c1[0], c1[1], 0])
+    c2 = np.array([c2[0], c2[1], 0])
+    for i in range(0,80, 10):
+        reds = make_circle(c1, n_samples=n_samples, radius=r, color=1)
+        blues = make_circle(c2, n_samples=n_samples, radius=r, color=0)
+        data = np.vstack((reds, blues))
+        data = randomize_data(data, i)
+        np.save('pointsets/circles_pm/circles_pm_{}_0.npy'.format(i), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        plt.ylim(c1[1]-2*r, c1[1]+2*r)
+        plt.xlim(c1[0]-r*1.1,  c2[0]+r*1.1)
+        util.plot_points_2d_np(data, plt, 'pointsets/circles_pm/circles_pm_{}.png'.format(i))
+
+
+def probabilistic_mixing_cross(lim1x, lim2x, lim1y, lim2y, n_samples):
+    for i in range(0,80,10):
+        data = make_cross(lim1x, lim2x, lim1y, lim2y, n_samples)
+        data = randomize_data(data, i)
+        np.save('pointsets/cross_pm/cross_pm_{}_0.npy'.format(i), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        util.plot_points_2d_np(data, plt, 'pointsets/cross_pm/cross_pm_{}.png'.format(i))
+
+
+def probabilistic_mixing_s_curve(n_samples, noise):
+    for i in range(0, 80, 10):
+        data = make_s_dataset(n_samples, noise)
+        data = randomize_data(data, i)
+        np.save('pointsets/s_curve_pm/s_curve_pm_{}_0.npy'.format(i), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        util.plot_points_2d_np(data, plt, 'pointsets/s_curve_pm/s_curve_pm_{}.png'.format(i))
+
+
+def probabilistic_mixing_rectangles(x_lim_v, y_lim_v, x_lim_h, y_lim_h, n_samples):
+    for i in range(0, 80, 10):
+        reds = make_rectangle_lim(limx=(x_lim_v[0], x_lim_v[1]), limy=y_lim_v, n_samples=n_samples, color=1)
+        blues1 = make_rectangle_lim(limx=(0, x_lim_v[0]), limy=(y_lim_h[0], y_lim_h[1]), n_samples=n_samples, color=0)
+        blues2 = make_rectangle_lim(limx=(x_lim_v[1], x_lim_h[1]), limy=(y_lim_h[0], y_lim_h[1]), n_samples=n_samples,color=0)
+        data = np.vstack((blues1, blues2, reds))
+        data = randomize_data(data, i)
+        np.save('pointsets/crossing_recs_pm/crossing_recs_pm_{}_0.npy'.format(i), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        util.plot_points_2d_np(data, plt, 'pointsets/crossing_recs_pm/crossing_recs_pm_{}.png'.format(i))
+
+
+def probabilistic_mixing_moons(n_samples, noise):
+    for i in range(0, 80, 10):
+        data = make_moons(n_samples, noise)
+        data = randomize_data(data, i)
+        np.save('pointsets/moons_pm/moons_pm_{}_0.npy'.format(i), data)
+        plt.tick_params(
+            axis='both',  # changes apply to the x-axis
+            which='both',  # both major and minor ticks are affected
+            bottom=False,  # ticks along the bottom edge are off
+            # top=False,  # ticks along the top edge are off
+            left=False,
+            labelbottom=False,
+            labelleft=False)
+        util.plot_points_2d_np(data, plt, 'pointsets/moons_pm/moons_pm_{}.png'.format(i))
 
 for i in range(11):
     g = grow_rectangle_horizontally(reds, (1,1.25), (0,2.25), i *10)
