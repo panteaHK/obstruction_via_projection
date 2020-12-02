@@ -57,8 +57,11 @@ def translate_to_bases(points, A):
     return np.array(new_points, dtype='float64')
 
 
-def project_points_2D(points, projection_vector, dim=3):
-    A = projection_vector
+def project_points(points, projection_vector):
+    dim = points.shape[1]
+    A = np.empty((0, dim))
+    A = np.vstack((A, projection_vector))
+
     for i in range(1, dim):
         A = np.vstack((A, generate_base(i, dim)))
 
@@ -120,17 +123,15 @@ def get_mixedness(projected_data, mix_labels):
 
 
 def plot_points_2D(data, plt, outputfile, format='png', dpi=800):
-    color = color = ['red' if l == 0 else 'blue' for l in data['label']]
+    color = ['red' if l == 0 else 'blue' for l in data['label']]
     plt.scatter(data['x'], data['y'], color=color, marker='.')
     plt.savefig(outputfile, format=format, dpi=dpi)
     plt.show()
 
 
-def plot_points_2d_np(data, plt, outputfile, dpi=500):
+def plot_points_2d_np(data, plt, outputfile, dpi=200):
     color = ['blue' if l == 0 else 'red' for l in data[:, -1]]
     plt.scatter(data[:, 0], data[:, 1], color=color, marker='.')
-    plt.ylim(-0.25, 1.25)
-    plt.xlim(-0.25, 1.25)
     plt.savefig(outputfile, dpi=dpi)
     plt.show()
 
@@ -146,3 +147,7 @@ def get_file_names(dir):
 def get_colors(data):
     color = ['blue' if l == 0 else 'red' for l in data[:, -1]]
     return color
+
+
+def sort_by_column(arr, i):
+    return arr[arr[:,i].argsort()]

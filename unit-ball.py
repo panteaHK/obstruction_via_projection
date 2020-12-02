@@ -6,6 +6,9 @@ from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import util
+from sklearn.svm import LinearSVC
+from sklearn.metrics import hinge_loss
+from sklearn.model_selection import GridSearchCV
 
 
 def generate_random_unit_vector():
@@ -14,7 +17,7 @@ def generate_random_unit_vector():
     x = math.sin(phi) * math.cos(theta)
     y = math.sin(phi) * math.sin(theta)
     z = math.cos(phi)
-    return np.array([x,y,z])
+    return np.array([x, y, z])
 
 
 def remove_projection(v, p):
@@ -60,16 +63,36 @@ def process_batch(data, batch, sep_labels, mix_labels):
     return remaining
 
 
+def get_hinge_loss_mixedness(projected_data, labels):
+    X, Y = projected_data, labels
+    clf = LinearSVC(C=10)
+    clf.fit(X, Y)
+    return hinge_loss(Y, clf.decision_function(X))
+
+
 def fast_process_batch(data, batch, sep_labels, mix_labels):
     remaining = np.empty((0,3))
     mixedness = []
-    for i in range(batch.shape[0]):
-        data_proj = util.project_points_2D(data, batch[i])
+    for vector in range(batch):
+        data_proj = util.project_points_2D(data, vector)
         b1 = util.is_linearly_separable(data_proj, sep_labels)
         b2 = util.is_linearly_separable(data_proj, mix_labels)
         if b1 and not b2:
-            remaining = np.append(remaining , [batch[i]], axis = 0)
+            remaining = np.append(remaining, vector, axis=0)
             mixedness.append(util.get_mixedness(data_proj, mix_labels))
+    return remaining, mixedness
+
+
+def process_batch_vectors_hinge(data, batch, sep_labels, mix_labels):
+    remaining = np.empty((0,3))
+    mixedness = []
+    for vector in batch:
+        data_proj = util.project_points(data, vector)
+        b1 = util.is_linearly_separable(data_proj, sep_labels)
+        b2 = util.is_linearly_separable(data_proj, mix_labels)
+        if b1 and not b2:
+            remaining = np.vstack((remaining, vector))
+            mixedness.append(get_hinge_loss_mixedness(data_proj, mix_labels))
     return remaining, mixedness
 
 
@@ -111,8 +134,8 @@ def plot_data(data, sep_labels, mix_labels):
 if __name__ == '__main__':
     # n_iter = input('Please enter number of samplings (will be separated in batches of 200):\n')
     # n_iter = int(n_iter)
-    batch_size = 200
-    epochs = 1000
+    batch_size = 2000
+    epochs = 100
 
     points = pd.read_csv("data.csv")
     sep_f, mix_f = 'f_1', 'f_2'
@@ -120,37 +143,32 @@ if __name__ == '__main__':
     sep_labels = get_labels(points, sep_f)
     mix_labels = get_labels(points, mix_f)
     counter = 0
-    read = True
-    file = 'output2.npy'
+    read = False
+    file = 'counter_example.npy'
 
     all = np.empty((0, 3))
-
+    mixedness= np.empty((0, 1))
     if not read:
         for i in range(epochs):
-            remaining = fast_process_batch(data, generate_batch_vectors(batch_size), sep_labels, mix_labels)
-            all = np.append(all, remaining, axis=0)
+            batch = generate_batch_vectors(batch_size)
+            vects, measures = process_batch_vectors_hinge(data, batch, sep_labels, mix_labels)
+            all = np.append(all, vects, axis=0)
+            mixedness = np.vstack((mixedness, np.array(measures)))
             counter = counter + 1
             print('Epoch {} out of {}'.format(counter, epochs))
-        save_output(all)
+        np.save('counter_example.npy', all)
     else:
         all = np.load(file)
-        all, mixedness = fast_process_batch(data, all, sep_labels, mix_labels)
-    # all = fast_process_batch(data, np.load('samples.npy'), sep_labels, mix_labels)
+        for vec in all:
+            data_proj = util.project_points(data, vec)
+            mixedness= np.vstack((mixedness, util.get_mixedness(data_proj, mix_labels)))
 
     print("The number of eligible vectors is %d" % all.shape[0])
 
     print("Plotting 3D and 2D illustrations.")
-    projected = util.stereographic_projection_x1(all)
+    projected = util.stereographic_projection_x1(all[:, :-1])
 
-    # #Plot the vectors
-    # fig_3d = plt.figure(1)
-    # ax_3d = fig_3d.a dd_subplot(111, projection='3d')
-    # util.visualise_3D(all, ax_3d, c='r')
-    # # util.visualise_3D(projected, ax_3d, c='b')
-    # ax_3d.set_xlim3d(-5, 5)
-    # ax_3d.set_ylim3d(-5, 5)
-    # ax_3d.set_zlim3d(-5, 5)
-    # plt.show()
+
 
     fig_2d = plt.figure(2)
     ax_2d = fig_2d.add_subplot(111)
@@ -175,3 +193,35 @@ if __name__ == '__main__':
 # plt.plot(g1[:, 0], g1[:, 1], 'o')
 # plt.plot(g2[:, 0], g2[:, 1], 'ro')
 # plt.show()
+
+n = 1000
+x = np.array([1]*n).reshape((-1,1))
+extras_1 = np.hstack((x, np.random.uniform(0, 0.86, n).reshape((-1, 1)), np.random.uniform(0.85, 1.15, n).reshape((-1,1))))
+extras_2 = np.hstack((x, np.random.uniform(0.85, 1.1, n).reshape((-1, 1)), np.random.uniform(0, 0.86, n).reshape((-1,1))))
+extras_3 = np.hstack((x, np.random.uniform(0.85, 1.1, n).reshape((-1, 1)), np.random.uniform(0.85, 1.1, n).reshape((-1,1))))
+extras = np.vstack((extras_1, extras_2, extras_3))
+v, m = process_batch_vectors_hinge(data, extras, sep_labels, mix_labels)
+
+
+n = 5000
+xe = np.array([1]*n).reshape((-1,1))
+e = np.hstack((xe, np.random.uniform(0.97, 1.1, n).reshape((-1, 1)), np.random.uniform(0, 1, n).reshape((-1,1))))
+ve, me = process_batch_vectors_hinge(data, e, sep_labels, mix_labels)
+
+vt = np.vstack((v, ve))
+mt = m + me
+
+plt.scatter(vt[:, 1], vt[:,2], cmap='gist_heat', c=mt, marker='.', s=20)
+plt.colorbar()
+plt.show()
+
+v = vt
+m = mt
+
+
+
+extras = extras.reshape((-1,2))
+extras = np.hstack((ones, extras))
+for u in extras:
+    data_p = util.project_points(data, u)
+    e_loss.append(get_hinge_loss_mixedness(data_p, mix_labels))
